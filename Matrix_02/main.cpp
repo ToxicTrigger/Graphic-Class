@@ -2,6 +2,7 @@
 #include <DirectXMath.h>
 #include <DirectXPackedVector.h>
 #include <iostream>
+#include <math.h>
 
 using namespace std;
 using namespace DirectX;
@@ -22,6 +23,7 @@ ostream& XM_CALLCONV operator << (ostream& os, FXMMATRIX m)
 
 int main( )
 {
+	
 	XMMATRIX A
 	(
 		1.0f, 0.0f, 4.0f, 0.0f,
@@ -94,15 +96,13 @@ int main( )
 		0.0f, 0.0f, 0.0f, 0.0f,
 		0.0f, 0.0f, 0.0f, 0.0f
 	);
-
+	
 	cout << "pT = " << endl << p * T << endl;
 	cout << "qT = " << endl << q * T << endl;
 	cout << "pS = " << endl << q * S << endl;
 	cout << "SRT = " << endl << S * Ry * T << endl;
 	cout << "qSRT = " << endl << q * S * Ry * T << endl;
 	cout << "pSRT = " << endl << p * S * Ry * T << endl;
-
-	
 
 	getchar();
 }
