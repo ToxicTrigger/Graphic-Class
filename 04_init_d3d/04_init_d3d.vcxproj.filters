@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="InitDirect3DApp.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="d3dApp.cpp">
@@ -44,13 +44,13 @@
     <ClInclude Include="GameTimer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="d3dx12.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="DDSTextureLoader.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="MathHelper.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="d3dx12.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
