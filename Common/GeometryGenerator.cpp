@@ -613,6 +613,46 @@ GeometryGenerator::MeshData GeometryGenerator::CreateGrid(float width, float dep
     return meshData;
 }
 
+GeometryGenerator::MeshData GeometryGenerator::CreatePyramid(float x, float y, float z, float w, float h)
+{
+	MeshData md;
+	md.Vertices.resize(5);
+	md.Indices32.resize(18);
+
+	md.Vertices[0] = Vertex(x - w/2, y, z - w / 2, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+	md.Vertices[1] = Vertex(x - w/2, y, z + w / 2, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+	md.Vertices[2] = Vertex(x + w / 2, y, z - w / 2, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+	md.Vertices[3] = Vertex(x + w / 2, y, z + w / 2, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+	md.Vertices[4] = Vertex(x, y+h, z,			     0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+	md.Indices32[0] = 4;
+	md.Indices32[1] = 2;
+	md.Indices32[2] = 0;
+
+	md.Indices32[3] = 2;
+	md.Indices32[4] = 4;
+	md.Indices32[5] = 3;
+
+	md.Indices32[6] = 3;
+	md.Indices32[7] = 4;
+	md.Indices32[8] = 1;
+
+	md.Indices32[9] = 1;
+	md.Indices32[10] = 4;
+	md.Indices32[11] = 0;
+	
+	md.Indices32[12] = 0;
+	md.Indices32[13] = 2;
+	md.Indices32[14] = 3;
+	
+	md.Indices32[15] = 3;
+	md.Indices32[16] = 1;
+	md.Indices32[17] = 0;
+
+	return md;
+}
+
 GeometryGenerator::MeshData GeometryGenerator::CreateQuad(float x, float y, float w, float h, float depth)
 {
     MeshData meshData;
@@ -655,3 +695,4 @@ GeometryGenerator::MeshData GeometryGenerator::CreateQuad(float x, float y, floa
 
     return meshData;
 }
+

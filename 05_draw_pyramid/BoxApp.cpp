@@ -8,9 +8,9 @@
 //   Hold the right mouse button down and move the mouse to zoom in and out.
 //***************************************************************************************
 
-#include "Common/d3dApp.h"
-#include "Common/MathHelper.h"
-#include "Common/UploadBuffer.h"
+#include "../Common/d3dApp.h"
+#include "../Common/MathHelper.h"
+#include "../Common/UploadBuffer.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -203,7 +203,7 @@ void BoxApp::Draw(const GameTimer& gt)
 
 	mCommandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexBufferView());
 	mCommandList->IASetIndexBuffer(&mBoxGeo->IndexBufferView());
-    mCommandList->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     
     mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 
@@ -361,21 +361,18 @@ void BoxApp::BuildShadersAndInputLayout()
     };
 }
 
-
-
 void BoxApp::BuildBoxGeometry()
 {
-	/*
     std::array<Vertex, 8> vertices =
     {
-        Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green) }),
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) })
+        Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Red) }),
+		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Green) }),
+		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Blue) }),
+		Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::GreenYellow) }),
+		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::DarkOliveGreen) }),
+		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Bisque) }),
+		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::RoyalBlue) }),
+		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Yellow) })
     };
 
 	std::array<std::uint16_t, 36> indices =
@@ -403,41 +400,6 @@ void BoxApp::BuildBoxGeometry()
 		// bottom face
 		4, 0, 3,
 		4, 3, 7
-	};
-	*/
-
-	std::array<Vertex, 9> vertices =
-	{
-		Vertex({ XMFLOAT3(0.0f, 4.0f, 0.0f), XMFLOAT4(Colors::Red) }),
-		Vertex({ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(Colors::ForestGreen) }),
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(Colors::Cyan) }),
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Aqua) }),
-		Vertex({ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
-		
-		Vertex({ XMFLOAT3(-5.0f, -1.0f, -5.0f), XMFLOAT4(Colors::Black) }),
-		Vertex({ XMFLOAT3(5.0f, -1.0f, -5.0f), XMFLOAT4(Colors::Black) }),
-		Vertex({ XMFLOAT3(5.0f, -1.0f, 5.0f), XMFLOAT4(Colors::Black) }),
-		Vertex({ XMFLOAT3(-5.0f, -1.0f, 5.0f), XMFLOAT4(Colors::Black) }),
-
-	};
-
-	std::array<std::uint16_t, 30> indices =
-	{
-		// front face
-		2, 1, 0,
-		1, 4, 0,
-		4, 3, 0,
-		3, 2, 0,
-
-		3, 4, 1,
-		3, 1, 2,
-
-		8, 7, 6,
-		8, 6, 5,
-
-		6, 7, 8,
-		5, 6, 8
-
 	};
 
     const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);

@@ -17,6 +17,9 @@
 #include <cstdint>
 #include <DirectXMath.h>
 #include <vector>
+#include <string>
+#include <fstream>
+using namespace std;
 
 class GeometryGenerator
 {
@@ -105,10 +108,15 @@ public:
 	///</summary>
     MeshData CreateGrid(float width, float depth, uint32 m, uint32 n);
 
+	MeshData CreatePyramid(float x, float y, float z, float w, float h);
+
+	GeometryGenerator::MeshData CreateModel(string path);
+
 	///<summary>
 	/// Creates a quad aligned with the screen.  This is useful for postprocessing and screen effects.
 	///</summary>
     MeshData CreateQuad(float x, float y, float w, float h, float depth);
+
 
 private:
 	void Subdivide(MeshData& meshData);

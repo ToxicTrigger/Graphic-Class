@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Matrix_02", "Matrix_02\Matr
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "04_init_d3d", "04_init_d3d\04_init_d3d.vcxproj", "{54CEAFC8-BEC2-471F-A6BB-41BAAEC3F253}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "05_draw_pyramid", "05_draw_pyramid\05_draw_pyramid.vcxproj", "{9ECB27F3-7F77-4344-98C3-40C0469064C0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{54CEAFC8-BEC2-471F-A6BB-41BAAEC3F253}.Release|x64.Build.0 = Release|x64
 		{54CEAFC8-BEC2-471F-A6BB-41BAAEC3F253}.Release|x86.ActiveCfg = Release|Win32
 		{54CEAFC8-BEC2-471F-A6BB-41BAAEC3F253}.Release|x86.Build.0 = Release|Win32
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Debug|x64.ActiveCfg = Debug|x64
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Debug|x64.Build.0 = Debug|x64
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Debug|x86.ActiveCfg = Debug|Win32
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Debug|x86.Build.0 = Debug|Win32
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Release|x64.ActiveCfg = Release|x64
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Release|x64.Build.0 = Release|x64
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Release|x86.ActiveCfg = Release|Win32
+		{9ECB27F3-7F77-4344-98C3-40C0469064C0}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
