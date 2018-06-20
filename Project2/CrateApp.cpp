@@ -1,13 +1,12 @@
 //***************************************************************************************
-// BlendApp.cpp by Frank Luna (C) 2015 All Rights Reserved.
+// CrateApp.cpp by Frank Luna (C) 2015 All Rights Reserved.
 //***************************************************************************************
 
-#include "../Common/d3dApp.h"
-#include "../Common/MathHelper.h"
-#include "../Common/UploadBuffer.h"
-#include "../Common/GeometryGenerator.h"
+#include "d3dApp.h"
+#include "MathHelper.h"
+#include "UploadBuffer.h"
+#include "GeometryGenerator.h"
 #include "FrameResource.h"
-#include "Waves.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -23,7 +22,7 @@ const int gNumFrameResources = 3;
 struct RenderItem
 {
 	RenderItem() = default;
- 
+
     // World matrix of the shape that describes the object's local space
     // relative to the world space, which defines the position, orientation,
     // and scale of the object in the world.
@@ -52,22 +51,15 @@ struct RenderItem
     int BaseVertexLocation = 0;
 };
 
-enum class RenderLayer : int
-{
-	Opaque = 0,
-	Transparent,
-	AlphaTested,
-	A,
-	Count,
-};
 
-class BlendApp : public D3DApp
+
+class CrateApp : public D3DApp
 {
 public:
-    BlendApp(HINSTANCE hInstance);
-    BlendApp(const BlendApp& rhs) = delete;
-    BlendApp& operator=(const BlendApp& rhs) = delete;
-    ~BlendApp();
+    CrateApp(HINSTANCE hInstance);
+    CrateApp(const CrateApp& rhs) = delete;
+    CrateApp& operator=(const CrateApp& rhs) = delete;
+    ~CrateApp();
 
     virtual bool Initialize()override;
 
@@ -86,17 +78,12 @@ private:
 	void UpdateObjectCBs(const GameTimer& gt);
 	void UpdateMaterialCBs(const GameTimer& gt);
 	void UpdateMainPassCB(const GameTimer& gt);
-	void UpdateWaves(const GameTimer& gt); 
 
-	float dis(XMFLOAT3 x, XMFLOAT3 y);
 	void LoadTextures();
-	void BuildCylinder();
     void BuildRootSignature();
 	void BuildDescriptorHeaps();
     void BuildShadersAndInputLayout();
-    void BuildLandGeometry();
-    void BuildWavesGeometry();
-	void BuildBoxGeometry();
+    void BuildShapeGeometry();
     void BuildPSOs();
     void BuildFrameResources();
     void BuildMaterials();
@@ -104,9 +91,6 @@ private:
     void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
-
-    float GetHillsHeight(float x, float z)const;
-    XMFLOAT3 GetHillsNormal(float x, float z)const;
 
 private:
 
@@ -124,19 +108,16 @@ private:
 	std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
 	std::unordered_map<std::string, std::unique_ptr<Texture>> mTextures;
 	std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
-	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
- 
-    RenderItem* mWavesRitem = nullptr;
 
+    ComPtr<ID3D12PipelineState> mOpaquePSO = nullptr;
+ 
 	// List of all the render items.
 	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
 
 	// Render items divided by PSO.
-	std::vector<RenderItem*> mRitemLayer[(int)RenderLayer::Count];
-
-	std::unique_ptr<Waves> mWaves;
+	std::vector<RenderItem*> mOpaqueRitems;
 
     PassConstants mMainPassCB;
 
@@ -144,9 +125,9 @@ private:
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
 
-    float mTheta = 1.5f*XM_PI;
-    float mPhi = XM_PIDIV2 - 0.1f;
-    float mRadius = 50.0f;
+	float mTheta = 1.3f*XM_PI;
+	float mPhi = 0.4f*XM_PI;
+	float mRadius = 2.5f;
 
     POINT mLastMousePos;
 };
@@ -161,7 +142,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 
     try
     {
-        BlendApp theApp(hInstance);
+        CrateApp theApp(hInstance);
         if(!theApp.Initialize())
             return 0;
 
@@ -174,18 +155,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
     }
 }
 
-BlendApp::BlendApp(HINSTANCE hInstance)
+CrateApp::CrateApp(HINSTANCE hInstance)
     : D3DApp(hInstance)
 {
 }
 
-BlendApp::~BlendApp()
+CrateApp::~CrateApp()
 {
     if(md3dDevice != nullptr)
         FlushCommandQueue();
 }
 
-bool BlendApp::Initialize()
+bool CrateApp::Initialize()
 {
     if(!D3DApp::Initialize())
         return false;
@@ -197,16 +178,12 @@ bool BlendApp::Initialize()
 	// so we have to query this information.
     mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    mWaves = std::make_unique<Waves>(128, 128, 1.0f, 0.03f, 4.0f, 0.2f);
  
 	LoadTextures();
     BuildRootSignature();
 	BuildDescriptorHeaps();
     BuildShadersAndInputLayout();
-    BuildLandGeometry();
-    BuildWavesGeometry();
-	BuildBoxGeometry();
-	BuildCylinder();
+    BuildShapeGeometry();
 	BuildMaterials();
     BuildRenderItems();
     BuildFrameResources();
@@ -223,7 +200,7 @@ bool BlendApp::Initialize()
     return true;
 }
  
-void BlendApp::OnResize()
+void CrateApp::OnResize()
 {
     D3DApp::OnResize();
 
@@ -232,7 +209,7 @@ void BlendApp::OnResize()
     XMStoreFloat4x4(&mProj, P);
 }
 
-void BlendApp::Update(const GameTimer& gt)
+void CrateApp::Update(const GameTimer& gt)
 {
     OnKeyboardInput(gt);
 	UpdateCamera(gt);
@@ -255,10 +232,9 @@ void BlendApp::Update(const GameTimer& gt)
 	UpdateObjectCBs(gt);
 	UpdateMaterialCBs(gt);
 	UpdateMainPassCB(gt);
-    UpdateWaves(gt);
 }
 
-void BlendApp::Draw(const GameTimer& gt)
+void CrateApp::Draw(const GameTimer& gt)
 {
     auto cmdListAlloc = mCurrFrameResource->CmdListAlloc;
 
@@ -268,7 +244,7 @@ void BlendApp::Draw(const GameTimer& gt)
 
     // A command list can be reset after it has been added to the command queue via ExecuteCommandList.
     // Reusing the command list reuses memory.
-    ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["opaque"].Get()));
+    ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mOpaquePSO.Get()));
 
     mCommandList->RSSetViewports(1, &mScreenViewport);
     mCommandList->RSSetScissorRects(1, &mScissorRect);
@@ -278,7 +254,7 @@ void BlendApp::Draw(const GameTimer& gt)
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
     // Clear the back buffer and depth buffer.
-    mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
+    mCommandList->ClearRenderTargetView(CurrentBackBufferView(), Colors::LightSteelBlue, 0, nullptr);
     mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
     // Specify the buffers we are going to render to.
@@ -292,17 +268,7 @@ void BlendApp::Draw(const GameTimer& gt)
 	auto passCB = mCurrFrameResource->PassCB->Resource();
 	mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
 
-    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
-
-	mCommandList->SetPipelineState(mPSOs["alphaTested"].Get());
-	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::AlphaTested]);
-
-
-	mCommandList->SetPipelineState(mPSOs["a"].Get());
-	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::A]);
-
-	mCommandList->SetPipelineState(mPSOs["transparent"].Get());
-	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
+    DrawRenderItems(mCommandList.Get(), mOpaqueRitems);
 
     // Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -322,14 +288,13 @@ void BlendApp::Draw(const GameTimer& gt)
     // Advance the fence value to mark commands up to this fence point.
     mCurrFrameResource->Fence = ++mCurrentFence;
 
-
     // Add an instruction to the command queue to set a new fence point. 
     // Because we are on the GPU timeline, the new fence point won't be 
     // set until the GPU finishes processing all the commands prior to this Signal().
     mCommandQueue->Signal(mFence.Get(), mCurrentFence);
 }
 
-void BlendApp::OnMouseDown(WPARAM btnState, int x, int y)
+void CrateApp::OnMouseDown(WPARAM btnState, int x, int y)
 {
     mLastMousePos.x = x;
     mLastMousePos.y = y;
@@ -337,12 +302,12 @@ void BlendApp::OnMouseDown(WPARAM btnState, int x, int y)
     SetCapture(mhMainWnd);
 }
 
-void BlendApp::OnMouseUp(WPARAM btnState, int x, int y)
+void CrateApp::OnMouseUp(WPARAM btnState, int x, int y)
 {
     ReleaseCapture();
 }
 
-void BlendApp::OnMouseMove(WPARAM btnState, int x, int y)
+void CrateApp::OnMouseMove(WPARAM btnState, int x, int y)
 {
     if((btnState & MK_LBUTTON) != 0)
     {
@@ -360,8 +325,8 @@ void BlendApp::OnMouseMove(WPARAM btnState, int x, int y)
     else if((btnState & MK_RBUTTON) != 0)
     {
         // Make each pixel correspond to 0.2 unit in the scene.
-        float dx = 0.2f*static_cast<float>(x - mLastMousePos.x);
-        float dy = 0.2f*static_cast<float>(y - mLastMousePos.y);
+        float dx = 0.05f*static_cast<float>(x - mLastMousePos.x);
+        float dy = 0.05f*static_cast<float>(y - mLastMousePos.y);
 
         // Update the camera radius based on input.
         mRadius += dx - dy;
@@ -374,11 +339,11 @@ void BlendApp::OnMouseMove(WPARAM btnState, int x, int y)
     mLastMousePos.y = y;
 }
  
-void BlendApp::OnKeyboardInput(const GameTimer& gt)
+void CrateApp::OnKeyboardInput(const GameTimer& gt)
 {
 }
  
-void BlendApp::UpdateCamera(const GameTimer& gt)
+void CrateApp::UpdateCamera(const GameTimer& gt)
 {
 	// Convert Spherical to Cartesian coordinates.
 	mEyePos.x = mRadius*sinf(mPhi)*cosf(mTheta);
@@ -394,10 +359,9 @@ void BlendApp::UpdateCamera(const GameTimer& gt)
 	XMStoreFloat4x4(&mView, view);
 }
 
-void BlendApp::AnimateMaterials(const GameTimer& gt)
+void CrateApp::AnimateMaterials(const GameTimer& gt)
 {
-	// Scroll the water material texture coordinates.
-	auto waterMat = mMaterials["water"].get();
+	auto waterMat = mMaterials["Water"].get();
 
 	float& tu = waterMat->MatTransform(3, 0);
 	float& tv = waterMat->MatTransform(3, 1);
@@ -405,10 +369,10 @@ void BlendApp::AnimateMaterials(const GameTimer& gt)
 	tu += 0.1f * gt.DeltaTime();
 	tv += 0.02f * gt.DeltaTime();
 
-	if(tu >= 1.0f)
+	if (tu >= 1.0f)
 		tu -= 1.0f;
 
-	if(tv >= 1.0f)
+	if (tv >= 1.0f)
 		tv -= 1.0f;
 
 	waterMat->MatTransform(3, 0) = tu;
@@ -418,7 +382,7 @@ void BlendApp::AnimateMaterials(const GameTimer& gt)
 	waterMat->NumFramesDirty = gNumFrameResources;
 }
 
-void BlendApp::UpdateObjectCBs(const GameTimer& gt)
+void CrateApp::UpdateObjectCBs(const GameTimer& gt)
 {
 	auto currObjectCB = mCurrFrameResource->ObjectCB.get();
 	for(auto& e : mAllRitems)
@@ -431,11 +395,8 @@ void BlendApp::UpdateObjectCBs(const GameTimer& gt)
 			XMMATRIX texTransform = XMLoadFloat4x4(&e->TexTransform);
 
 			ObjectConstants objConstants;
-
 			XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
 			XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
-
-			objConstants.opacity = dis({ 0.0f, 0.0f, 0.0f }, mEyePos)* 0.0155f;
 
 			currObjectCB->CopyData(e->ObjCBIndex, objConstants);
 
@@ -445,24 +406,7 @@ void BlendApp::UpdateObjectCBs(const GameTimer& gt)
 	}
 }
 
-#include <math.h>
-float BlendApp::dis(XMFLOAT3 x, XMFLOAT3 y)
-{
-	float a = (y.x - x.x);
-	a = a*a;
-
-	float b = y.y - x.y;
-	b = b*b;
-
-	float c = y.z - x.z;
-	c = c*c;
-
-	float d = a + b + c;
-	d = std::sqrt(d);
-	return d;
-}
-
-void BlendApp::UpdateMaterialCBs(const GameTimer& gt)
+void CrateApp::UpdateMaterialCBs(const GameTimer& gt)
 {
 	auto currMaterialCB = mCurrFrameResource->MaterialCB.get();
 	for(auto& e : mMaterials)
@@ -473,13 +417,11 @@ void BlendApp::UpdateMaterialCBs(const GameTimer& gt)
 		if(mat->NumFramesDirty > 0)
 		{
 			XMMATRIX matTransform = XMLoadFloat4x4(&mat->MatTransform);
-			
 
 			MaterialConstants matConstants;
 			matConstants.DiffuseAlbedo = mat->DiffuseAlbedo;
 			matConstants.FresnelR0 = mat->FresnelR0;
 			matConstants.Roughness = mat->Roughness;
-
 			XMStoreFloat4x4(&matConstants.MatTransform, XMMatrixTranspose(matTransform));
 
 			currMaterialCB->CopyData(mat->MatCBIndex, matConstants);
@@ -490,7 +432,7 @@ void BlendApp::UpdateMaterialCBs(const GameTimer& gt)
 	}
 }
 
-void BlendApp::UpdateMainPassCB(const GameTimer& gt)
+void CrateApp::UpdateMainPassCB(const GameTimer& gt)
 {
 	XMMATRIX view = XMLoadFloat4x4(&mView);
 	XMMATRIX proj = XMLoadFloat4x4(&mProj);
@@ -515,117 +457,71 @@ void BlendApp::UpdateMainPassCB(const GameTimer& gt)
 	mMainPassCB.DeltaTime = gt.DeltaTime();
 	mMainPassCB.AmbientLight = { 0.25f, 0.25f, 0.35f, 1.0f };
 	mMainPassCB.Lights[0].Direction = { 0.57735f, -0.57735f, 0.57735f };
-	mMainPassCB.Lights[0].Strength = { 0.9f, 0.9f, 0.8f };
+	mMainPassCB.Lights[0].Strength = { 0.6f, 0.6f, 0.6f };
 	mMainPassCB.Lights[1].Direction = { -0.57735f, -0.57735f, 0.57735f };
 	mMainPassCB.Lights[1].Strength = { 0.3f, 0.3f, 0.3f };
 	mMainPassCB.Lights[2].Direction = { 0.0f, -0.707f, -0.707f };
 	mMainPassCB.Lights[2].Strength = { 0.15f, 0.15f, 0.15f };
 
-
-
 	auto currPassCB = mCurrFrameResource->PassCB.get();
 	currPassCB->CopyData(0, mMainPassCB);
-	
 }
 
-void BlendApp::UpdateWaves(const GameTimer& gt)
+void CrateApp::LoadTextures()
 {
-	// Every quarter second, generate a random wave.
-	static float t_base = 0.0f;
-	if((mTimer.TotalTime() - t_base) >= 0.25f)
 	{
-		t_base += 0.25f;
+		auto woodCrateTex = std::make_unique<Texture>();
+		woodCrateTex->Name = "woodCrateTex";
+		woodCrateTex->Filename = L"../Textures/WoodCrate01.dds";
+		ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+			mCommandList.Get(), woodCrateTex->Filename.c_str(),
+			woodCrateTex->Resource, woodCrateTex->UploadHeap));
 
-		int i = MathHelper::Rand(4, mWaves->RowCount() - 5);
-		int j = MathHelper::Rand(4, mWaves->ColumnCount() - 5);
-
-		float r = MathHelper::RandF(0.2f, 0.5f);
-
-		mWaves->Disturb(i, j, r);
+		mTextures[woodCrateTex->Name] = std::move(woodCrateTex);
 	}
 
-	// Update the wave simulation.
-	mWaves->Update(gt.DeltaTime());
-
-	// Update the wave vertex buffer with the new solution.
-	auto currWavesVB = mCurrFrameResource->WavesVB.get();
-	for(int i = 0; i < mWaves->VertexCount(); ++i)
 	{
-		Vertex v;
+		auto woodCrateTex = std::make_unique<Texture>();
+		woodCrateTex->Name = "woodCrateTex2";
+		woodCrateTex->Filename = L"../Textures/WoodCrate02.dds";
+		ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+			mCommandList.Get(), woodCrateTex->Filename.c_str(),
+			woodCrateTex->Resource, woodCrateTex->UploadHeap));
 
-		v.Pos = mWaves->Position(i);
-		v.Normal = mWaves->Normal(i);
-		
-		// Derive tex-coords from position by 
-		// mapping [-w/2,w/2] --> [0,1]
-		v.TexC.x = 0.5f + v.Pos.x / mWaves->Width();
-		v.TexC.y = 0.5f - v.Pos.z / mWaves->Depth();
-
-		currWavesVB->CopyData(i, v);
+		mTextures[woodCrateTex->Name] = std::move(woodCrateTex);
 	}
 
+	{
+		auto woodCrateTex = std::make_unique<Texture>();
+		woodCrateTex->Name = "Water";
+		woodCrateTex->Filename = L"../Textures/water1.dds";
+		ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+			mCommandList.Get(), woodCrateTex->Filename.c_str(),
+			woodCrateTex->Resource, woodCrateTex->UploadHeap));
 
-	// Set the dynamic VB of the wave renderitem to the current frame VB.
-	mWavesRitem->Geo->VertexBufferGPU = currWavesVB->Resource();
+		mTextures[woodCrateTex->Name] = std::move(woodCrateTex);
+	}
+
 }
 
-void BlendApp::LoadTextures()
-{
-	auto grassTex = std::make_unique<Texture>();
-	grassTex->Name = "grassTex";
-	grassTex->Filename = L"../Textures/grass.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), grassTex->Filename.c_str(),
-		grassTex->Resource, grassTex->UploadHeap));
-
-	auto waterTex = std::make_unique<Texture>();
-	waterTex->Name = "waterTex";
-	waterTex->Filename = L"../Textures/water1.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), waterTex->Filename.c_str(),
-		waterTex->Resource, waterTex->UploadHeap));
-
-	auto fenceTex = std::make_unique<Texture>();
-	fenceTex->Name = "fenceTex";
-	fenceTex->Filename = L"../Textures/WireFence.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), fenceTex->Filename.c_str(),
-		fenceTex->Resource, fenceTex->UploadHeap));
-
-	auto wood = std::make_unique<Texture>();
-	wood->Name = "woodTex";
-	wood->Filename = L"../Textures/WoodCrate01.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), wood->Filename.c_str(),
-		wood->Resource, wood->UploadHeap));
-
-	mTextures[grassTex->Name] = std::move(grassTex);
-	mTextures[waterTex->Name] = std::move(waterTex);
-	mTextures[fenceTex->Name] = std::move(fenceTex);
-	mTextures[wood->Name] = std::move(wood);
-}
-
-
-
-void BlendApp::BuildRootSignature()
+void CrateApp::BuildRootSignature()
 {
 	CD3DX12_DESCRIPTOR_RANGE texTable;
 	texTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
     // Root parameter can be a table, root descriptor or root constants.
-    CD3DX12_ROOT_PARAMETER slotRootParameter[5];
+    CD3DX12_ROOT_PARAMETER slotRootParameter[4];
 
 	// Perfomance TIP: Order from most frequent to least frequent.
 	slotRootParameter[0].InitAsDescriptorTable(1, &texTable, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[1].InitAsConstantBufferView(0);
     slotRootParameter[2].InitAsConstantBufferView(1);
     slotRootParameter[3].InitAsConstantBufferView(2);
-	slotRootParameter[4].InitAsConstantBufferView(3);
 
 	auto staticSamplers = GetStaticSamplers();
 
     // A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter,
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, slotRootParameter,
 		(UINT)staticSamplers.size(), staticSamplers.data(),
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -648,13 +544,15 @@ void BlendApp::BuildRootSignature()
         IID_PPV_ARGS(mRootSignature.GetAddressOf())));
 }
 
-void BlendApp::BuildDescriptorHeaps()
+void CrateApp::BuildDescriptorHeaps()
 {
 	//
 	// Create the SRV heap.
 	//
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-	srvHeapDesc.NumDescriptors = 4;
+
+	//1 -> 3
+	srvHeapDesc.NumDescriptors = 3;
 	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -663,57 +561,55 @@ void BlendApp::BuildDescriptorHeaps()
 	// Fill out the heap with actual descriptors.
 	//
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	{
+		auto woodCrateTex = mTextures["woodCrateTex"]->Resource;
 
-	auto grassTex = mTextures["grassTex"]->Resource;
-	auto waterTex = mTextures["waterTex"]->Resource;
-	auto fenceTex = mTextures["fenceTex"]->Resource;
-	auto woodTex = mTextures["woodTex"]->Resource;
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format = woodCrateTex->GetDesc().Format;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.MipLevels = woodCrateTex->GetDesc().MipLevels;
+		srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = grassTex->GetDesc().Format;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MostDetailedMip = 0;
-	srvDesc.Texture2D.MipLevels = -1;
-	md3dDevice->CreateShaderResourceView(grassTex.Get(), &srvDesc, hDescriptor);
-
-	// next descriptor
+		md3dDevice->CreateShaderResourceView(woodCrateTex.Get(), &srvDesc, hDescriptor);
+	}
 	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+	{
+		auto woodCrateTex = mTextures["woodCrateTex2"]->Resource;
 
-	srvDesc.Format = waterTex->GetDesc().Format;
-	md3dDevice->CreateShaderResourceView(waterTex.Get(), &srvDesc, hDescriptor);
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format = woodCrateTex->GetDesc().Format;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.MipLevels = woodCrateTex->GetDesc().MipLevels;
+		srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
-	// next descriptor
+		md3dDevice->CreateShaderResourceView(woodCrateTex.Get(), &srvDesc, hDescriptor);
+	}
+
 	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+	{
+		auto woodCrateTex = mTextures["Water"]->Resource;
 
-	srvDesc.Format = fenceTex->GetDesc().Format;
-	md3dDevice->CreateShaderResourceView(fenceTex.Get(), &srvDesc, hDescriptor);
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format = woodCrateTex->GetDesc().Format;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.MipLevels = woodCrateTex->GetDesc().MipLevels;
+		srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
+		md3dDevice->CreateShaderResourceView(woodCrateTex.Get(), &srvDesc, hDescriptor);
+	}
 
-	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
-
-	srvDesc.Format = woodTex->GetDesc().Format;
-	md3dDevice->CreateShaderResourceView(woodTex.Get(), &srvDesc, hDescriptor);
 }
 
-void BlendApp::BuildShadersAndInputLayout()
+void CrateApp::BuildShadersAndInputLayout()
 {
-	const D3D_SHADER_MACRO defines[] =
-	{
-		"FOG", "1",
-		NULL, NULL
-	};
-
-	const D3D_SHADER_MACRO alphaTestDefines[] =
-	{
-		"FOG", "1",
-		"ALPHA_TEST", "1",
-		NULL, NULL
-	};
-
 	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "VS", "vs_5_0");
-	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", defines, "PS", "ps_5_0");
-	mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_0");
+	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "PS", "ps_5_0");
 	
     mInputLayout =
     {
@@ -723,182 +619,52 @@ void BlendApp::BuildShadersAndInputLayout()
     };
 }
 
-void BlendApp::BuildLandGeometry()
+void CrateApp::BuildShapeGeometry()
 {
     GeometryGenerator geoGen;
-    GeometryGenerator::MeshData grid = geoGen.CreateGrid(160.0f, 160.0f, 50, 50);
+	GeometryGenerator::MeshData box = geoGen.CreateBox(1.0f, 1.0f, 1.0f, 3);
+ 
+	SubmeshGeometry boxSubmesh;
+	boxSubmesh.IndexCount = (UINT)box.Indices32.size();
+	boxSubmesh.StartIndexLocation = 0;
+	boxSubmesh.BaseVertexLocation = 0;
 
-    //
-    // Extract the vertex elements we are interested and apply the height function to
-    // each vertex.  In addition, color the vertices based on their height so we have
-    // sandy looking beaches, grassy low hills, and snow mountain peaks.
-    //
+	GeometryGenerator grid;
+	GeometryGenerator::MeshData Grid = grid.CreateGrid(20, 30, 60, 40);
+	UINT gridVOffset = (UINT)box.Vertices.size();
+	UINT gridIndex = (UINT)box.Indices32.size();
+	SubmeshGeometry gridSub;
+	gridSub.IndexCount = (UINT)Grid.Indices32.size();
+	gridSub.StartIndexLocation = gridIndex;
+	gridSub.BaseVertexLocation = gridVOffset;
 
-    std::vector<Vertex> vertices(grid.Vertices.size());
-    for(size_t i = 0; i < grid.Vertices.size(); ++i)
-    {
-        auto& p = grid.Vertices[i].Position;
-        vertices[i].Pos = p;
-        vertices[i].Pos.y = GetHillsHeight(p.x, p.z);
-        vertices[i].Normal = GetHillsNormal(p.x, p.z);
-		vertices[i].TexC = grid.Vertices[i].TexC;
-    }
+	auto totalVertexCount =
+		box.Vertices.size() +
+		Grid.Vertices.size();
 
-    const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+	std::vector<Vertex> vertices(totalVertexCount);
 
-    std::vector<std::uint16_t> indices = grid.GetIndices16();
-    const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
-
-	auto geo = std::make_unique<MeshGeometry>();
-	geo->Name = "landGeo";
-
-	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
-	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
-
-	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-
-	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-		mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
-
-	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
-
-	geo->VertexByteStride = sizeof(Vertex);
-	geo->VertexBufferByteSize = vbByteSize;
-	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
-	geo->IndexBufferByteSize = ibByteSize;
-
-	SubmeshGeometry submesh;
-	submesh.IndexCount = (UINT)indices.size();
-	submesh.StartIndexLocation = 0;
-	submesh.BaseVertexLocation = 0;
-
-	geo->DrawArgs["grid"] = submesh;
-
-	mGeometries["landGeo"] = std::move(geo);
-}
-
-void BlendApp::BuildWavesGeometry()
-{
-    std::vector<std::uint16_t> indices(3 * mWaves->TriangleCount()); // 3 indices per face
-	assert(mWaves->VertexCount() < 0x0000ffff);
-
-    // Iterate over each quad.
-    int m = mWaves->RowCount();
-    int n = mWaves->ColumnCount();
-    int k = 0;
-    for(int i = 0; i < m - 1; ++i)
-    {
-        for(int j = 0; j < n - 1; ++j)
-        {
-            indices[k] = i*n + j;
-            indices[k + 1] = i*n + j + 1;
-            indices[k + 2] = (i + 1)*n + j;
-
-            indices[k + 3] = (i + 1)*n + j;
-            indices[k + 4] = i*n + j + 1;
-            indices[k + 5] = (i + 1)*n + j + 1;
-
-            k += 6; // next quad
-        }
-    }
-
-	UINT vbByteSize = mWaves->VertexCount()*sizeof(Vertex);
-	UINT ibByteSize = (UINT)indices.size()*sizeof(std::uint16_t);
-
-	auto geo = std::make_unique<MeshGeometry>();
-	geo->Name = "waterGeo";
-
-	// Set dynamically.
-	geo->VertexBufferCPU = nullptr;
-	geo->VertexBufferGPU = nullptr;
-
-	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-
-	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
-
-	geo->VertexByteStride = sizeof(Vertex);
-	geo->VertexBufferByteSize = vbByteSize;
-	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
-	geo->IndexBufferByteSize = ibByteSize;
-
-	SubmeshGeometry submesh;
-	submesh.IndexCount = (UINT)indices.size();
-	submesh.StartIndexLocation = 0;
-	submesh.BaseVertexLocation = 0;
-
-	geo->DrawArgs["grid"] = submesh;
-
-	mGeometries["waterGeo"] = std::move(geo);
-}
-
-void BlendApp::BuildCylinder()
-{
-	GeometryGenerator geoGen;
-	GeometryGenerator::MeshData cylinder = geoGen.CreateCylinder(10.0f, 5.0f, 30.0f, 20, 20);
-	std::vector<Vertex> vertices(cylinder.Vertices.size());
-	for (size_t i = 0; i < cylinder.Vertices.size(); ++i)
+	UINT k = 0;
+	for(size_t i = 0; i < box.Vertices.size(); ++i, ++k)
 	{
-		auto& p = cylinder.Vertices[i].Position;
-		vertices[i].Pos = p;
-		vertices[i].Normal = cylinder.Vertices[i].Normal;
-		vertices[i].TexC = cylinder.Vertices[i].TexC;
+		vertices[k].Pos = box.Vertices[i].Position;
+		vertices[k].Normal = box.Vertices[i].Normal;
+		vertices[k].TexC = box.Vertices[i].TexC;
 	}
 
-	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
-	std::vector<std::uint16_t> indices = cylinder.GetIndices16();
-	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
-	auto geo = std::make_unique<MeshGeometry>();
-	geo->Name = "cyGeo";
 
-	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
-	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
-
-	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-
-	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-		mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
-
-	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
-
-	geo->VertexByteStride = sizeof(Vertex);
-	geo->VertexBufferByteSize = vbByteSize;
-	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
-	geo->IndexBufferByteSize = ibByteSize;
-
-	SubmeshGeometry submesh;
-	submesh.IndexCount = (UINT)indices.size();
-	submesh.StartIndexLocation = 0;
-	submesh.BaseVertexLocation = 0;
-
-	geo->DrawArgs["Cylinder"] = submesh;
-
-	mGeometries["cyGeo"] = std::move(geo);
-}
-
-void BlendApp::BuildBoxGeometry()
-{
-	GeometryGenerator geoGen;
-	GeometryGenerator::MeshData box = geoGen.CreateBox(8.0f, 8.0f, 8.0f, 3);
-
-	std::vector<Vertex> vertices(box.Vertices.size());
-	for (size_t i = 0; i < box.Vertices.size(); ++i)
+	for (size_t i = 0; i < Grid.Vertices.size(); ++i, ++k)
 	{
-		auto& p = box.Vertices[i].Position;
-		vertices[i].Pos = p;
-		vertices[i].Normal = box.Vertices[i].Normal;
-		vertices[i].TexC = box.Vertices[i].TexC;
+		vertices[k].Pos = Grid.Vertices[i].Position;
+		vertices[k].Normal = Grid.Vertices[i].Normal;
+		vertices[k].TexC = Grid.Vertices[i].TexC;
 	}
-
-	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
 
 	std::vector<std::uint16_t> indices = box.GetIndices16();
-	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
+	indices.insert(indices.end(), std::begin(Grid.GetIndices16()), std::end(Grid.GetIndices16()));
+
+    const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+    const UINT ibByteSize = (UINT)indices.size()  * sizeof(std::uint16_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
 	geo->Name = "boxGeo";
@@ -920,17 +686,13 @@ void BlendApp::BuildBoxGeometry()
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
 
-	SubmeshGeometry submesh;
-	submesh.IndexCount = (UINT)indices.size();
-	submesh.StartIndexLocation = 0;
-	submesh.BaseVertexLocation = 0;
+	geo->DrawArgs["water"] = gridSub;
+	geo->DrawArgs["box"] = boxSubmesh;
 
-	geo->DrawArgs["box"] = submesh;
-
-	mGeometries["boxGeo"] = std::move(geo);
+	mGeometries[geo->Name] = std::move(geo);
 }
 
-void BlendApp::BuildPSOs()
+void CrateApp::BuildPSOs()
 {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc;
 
@@ -960,193 +722,112 @@ void BlendApp::BuildPSOs()
 	opaquePsoDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
 	opaquePsoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
 	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
-    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
-
-	//
-	// PSO for transparent objects
-	//
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC transparentPsoDesc = opaquePsoDesc;
-
-	D3D12_RENDER_TARGET_BLEND_DESC transparencyBlendDesc;
-	transparencyBlendDesc.BlendEnable = true;
-	transparencyBlendDesc.LogicOpEnable = false;
-	transparencyBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	transparencyBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	transparencyBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-	transparencyBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-	transparencyBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
-	transparencyBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	transparencyBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
-	transparencyBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	transparentPsoDesc.BlendState.RenderTarget[0] = transparencyBlendDesc;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&transparentPsoDesc, IID_PPV_ARGS(&mPSOs["transparent"])));
-
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC aDesc = opaquePsoDesc;
-
-	D3D12_RENDER_TARGET_BLEND_DESC aBlendDesc;
-	aBlendDesc.BlendEnable = true;
-	aBlendDesc.LogicOpEnable = false;
-	aBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	aBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	aBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-	aBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-	aBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
-	aBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	aBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
-	aBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	aDesc.BlendState.RenderTarget[0] = aBlendDesc;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&aDesc, IID_PPV_ARGS(&mPSOs["a"])));
-
-	//
-	// PSO for alpha tested objects
-	//
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC alphaTestedPsoDesc = opaquePsoDesc;
-	alphaTestedPsoDesc.PS = 
-	{ 
-		reinterpret_cast<BYTE*>(mShaders["alphaTestedPS"]->GetBufferPointer()),
-		mShaders["alphaTestedPS"]->GetBufferSize()
-	};
-	alphaTestedPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&alphaTestedPsoDesc, IID_PPV_ARGS(&mPSOs["alphaTested"])));
-
+    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mOpaquePSO)));
 
 }
 
-void BlendApp::BuildFrameResources()
+void CrateApp::BuildFrameResources()
 {
     for(int i = 0; i < gNumFrameResources; ++i)
     {
         mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
-            1, (UINT)mAllRitems.size(), (UINT)mMaterials.size(), mWaves->VertexCount()));
+            1, (UINT)mAllRitems.size(), (UINT)mMaterials.size()));
     }
 }
 
-void BlendApp::BuildMaterials()
+void CrateApp::BuildMaterials()
 {
-	auto grass = std::make_unique<Material>();
-	grass->Name = "grass";
-	grass->MatCBIndex = 0;
-	grass->DiffuseSrvHeapIndex = 0;
-	grass->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	grass->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
-	grass->Roughness = 0.125f;
+	auto woodCrate = std::make_unique<Material>();
+	woodCrate->Name = "woodCrate";
+	woodCrate->MatCBIndex = 0;
+	woodCrate->DiffuseSrvHeapIndex = 0;
+	woodCrate->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	woodCrate->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
+	woodCrate->Roughness = 0.2f;
 
-	// This is not a good water material definition, but we do not have all the rendering
-	// tools we need (transparency, environment reflection), so we fake it for now.
-	auto water = std::make_unique<Material>();
-	water->Name = "water";
-	water->MatCBIndex = 1;
-	water->DiffuseSrvHeapIndex = 1;
-	water->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.3f);
-	water->FresnelR0 = XMFLOAT3(0.3f, 0.2f, 0.4f);
-	water->Roughness = 0.2f;
+	auto redWoodCrate = std::make_unique<Material>();
+	redWoodCrate->Name = "woodCrateRed";
+	redWoodCrate->MatCBIndex = 1;
+	redWoodCrate->DiffuseSrvHeapIndex = 1;
+	redWoodCrate->DiffuseAlbedo = XMFLOAT4(1.0f, 0.5f, 0.5f, 1.0f);
+	redWoodCrate->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
+	redWoodCrate->Roughness = 0.2f;
 
-	auto wirefence = std::make_unique<Material>();
-	wirefence->Name = "wirefence";
-	wirefence->MatCBIndex = 2;
-	wirefence->DiffuseSrvHeapIndex = 2;
-	wirefence->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	wirefence->FresnelR0 = XMFLOAT3(0.1f, 0.1f, 0.1f);
-	wirefence->Roughness = 0.25f;
+	auto Water = std::make_unique<Material>();
+	Water->Name = "Water";
+	Water->MatCBIndex = 2;
+	Water->DiffuseSrvHeapIndex = 2;
+	Water->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.5f);
+	Water->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
+	Water->Roughness = 0.2f;
 
-	auto wood = std::make_unique<Material>();
-	wood->Name = "wood";
-	wood->MatCBIndex = 3;
-	wood->DiffuseSrvHeapIndex = 3;
-	wood->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	wood->FresnelR0 = XMFLOAT3(0.1f, 0.1f, 0.1f);
-	wood->Roughness = 0.25f;
-
-	mMaterials["grass"] = std::move(grass);
-	mMaterials["water"] = std::move(water);
-	mMaterials["wirefence"] = std::move(wirefence);
-	mMaterials["wood"] = std::move(wood);
+	mMaterials["woodCrateRed"] = std::move(redWoodCrate);
+	mMaterials["woodCrate"] = std::move(woodCrate);
+	mMaterials["Water"] = std::move(Water);
 }
 
-void BlendApp::BuildRenderItems()
+void CrateApp::BuildRenderItems()
 {
-    auto wavesRitem = std::make_unique<RenderItem>();
-    wavesRitem->World = MathHelper::Identity4x4();
-	XMStoreFloat4x4(&wavesRitem->TexTransform, XMMatrixScaling(5.0f, 5.0f, 1.0f));
-	wavesRitem->ObjCBIndex = 0;
-	wavesRitem->Mat = mMaterials["water"].get();
-	wavesRitem->Geo = mGeometries["waterGeo"].get();
-	wavesRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	wavesRitem->IndexCount = wavesRitem->Geo->DrawArgs["grid"].IndexCount;
-	wavesRitem->StartIndexLocation = wavesRitem->Geo->DrawArgs["grid"].StartIndexLocation;
-	wavesRitem->BaseVertexLocation = wavesRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
 
-    mWavesRitem = wavesRitem.get();
-
-	mRitemLayer[(int)RenderLayer::Transparent].push_back(wavesRitem.get());
-
-    auto gridRitem = std::make_unique<RenderItem>();
-    gridRitem->World = MathHelper::Identity4x4();
-	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(5.0f, 5.0f, 1.0f));
-	gridRitem->ObjCBIndex = 1;
-	gridRitem->Mat = mMaterials["grass"].get();
-	gridRitem->Geo = mGeometries["landGeo"].get();
-	gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-    gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
-    gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
-    gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::Opaque].push_back(gridRitem.get());
-
-	auto boxRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&boxRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
-	boxRitem->ObjCBIndex = 2;
-	boxRitem->Mat = mMaterials["wirefence"].get();
-	boxRitem->Geo = mGeometries["boxGeo"].get();
-	boxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount;
-	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
-	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::AlphaTested].push_back(boxRitem.get());
-
-	auto woodRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&woodRitem->World, XMMatrixTranslation(0.0f, 2.0f, 0.0f));
-	woodRitem->ObjCBIndex = 3;
-	woodRitem->Mat = mMaterials["wood"].get();
-	woodRitem->Geo = mGeometries["cyGeo"].get();
-	woodRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	woodRitem->IndexCount = woodRitem->Geo->DrawArgs["Cylinder"].IndexCount;
-	woodRitem->StartIndexLocation = woodRitem->Geo->DrawArgs["Cylinder"].StartIndexLocation;
-	woodRitem->BaseVertexLocation = woodRitem->Geo->DrawArgs["Cylinder"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::A].push_back(woodRitem.get());
-
-	auto woodRitem2 = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&woodRitem2->World, XMMatrixTranslation(40.0f, 2.0f, 50.0f));
-	woodRitem2->ObjCBIndex = 4;
-	woodRitem2->Mat = mMaterials["wood"].get();
-	woodRitem2->Geo = mGeometries["cyGeo"].get();
-	woodRitem2->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	woodRitem2->IndexCount = woodRitem2->Geo->DrawArgs["Cylinder"].IndexCount;
-	woodRitem2->StartIndexLocation = woodRitem2->Geo->DrawArgs["Cylinder"].StartIndexLocation;
-	woodRitem2->BaseVertexLocation = woodRitem2->Geo->DrawArgs["Cylinder"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::A].push_back(woodRitem2.get());
+	{
+		auto gridRitem = std::make_unique<RenderItem>();
+		gridRitem->World = MathHelper::Identity4x4();
+		XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
+		gridRitem->ObjCBIndex = 0;
+		gridRitem->Mat = mMaterials["Water"].get();
+		gridRitem->Geo = mGeometries["boxGeo"].get();
+		gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		gridRitem->IndexCount = gridRitem->Geo->DrawArgs["water"].IndexCount;
+		gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["water"].StartIndexLocation;
+		gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["water"].BaseVertexLocation;
+		mAllRitems.push_back(std::move(gridRitem));
+	}
 
 
-    mAllRitems.push_back(std::move(wavesRitem));
-    mAllRitems.push_back(std::move(gridRitem));
-	mAllRitems.push_back(std::move(boxRitem));
-	mAllRitems.push_back(std::move(woodRitem));
-	mAllRitems.push_back(std::move(woodRitem2));
+	{
+		auto boxRitem = std::make_unique<RenderItem>();
+		boxRitem->ObjCBIndex = 1;
+		boxRitem->Mat = mMaterials["woodCrate"].get();
+		boxRitem->Geo = mGeometries["boxGeo"].get();
+		boxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount/ 3;
+		boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
+		boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
+		mAllRitems.push_back(std::move(boxRitem));
+	}
+	{
+		auto boxRitem = std::make_unique<RenderItem>();
+		boxRitem->ObjCBIndex = 2;
+		boxRitem->Mat = mMaterials["Water"].get();
+		boxRitem->Geo = mGeometries["boxGeo"].get();
+		boxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount / 3;
+		boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation + (boxRitem->Geo->DrawArgs["box"].IndexCount / 3) * 2;
+		boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
+		mAllRitems.push_back(std::move(boxRitem));
+	}
+	{
+		auto boxRitem = std::make_unique<RenderItem>();
+		boxRitem->ObjCBIndex = 3;
+		boxRitem->Mat = mMaterials["woodCrateRed"].get();
+		boxRitem->Geo = mGeometries["boxGeo"].get();
+		boxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount / 3;
+		boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation + (boxRitem->Geo->DrawArgs["box"].IndexCount / 3) ;
+		boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
+		mAllRitems.push_back(std::move(boxRitem));
+	}
+
+	// All the render items are opaque.
+	for(auto& e : mAllRitems)
+		mOpaqueRitems.push_back(e.get());
 }
 
-void BlendApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
+void CrateApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
     UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
     UINT matCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(MaterialConstants));
-
+ 
 	auto objectCB = mCurrFrameResource->ObjectCB->Resource();
 	auto matCB = mCurrFrameResource->MaterialCB->Resource();
 
@@ -1169,13 +850,11 @@ void BlendApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
         cmdList->SetGraphicsRootConstantBufferView(1, objCBAddress);
         cmdList->SetGraphicsRootConstantBufferView(3, matCBAddress);
 
-		
-
         cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
     }
 }
 
-std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> BlendApp::GetStaticSamplers()
+std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> CrateApp::GetStaticSamplers()
 {
 	// Applications usually only need a handful of samplers.  So just define them all up front
 	// and keep them available as part of the root signature.  
@@ -1232,21 +911,3 @@ std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> BlendApp::GetStaticSamplers()
 		anisotropicWrap, anisotropicClamp };
 }
 
-float BlendApp::GetHillsHeight(float x, float z)const
-{
-    return 0.3f*(z*sinf(0.1f*x) + x*cosf(0.1f*z));
-}
-
-XMFLOAT3 BlendApp::GetHillsNormal(float x, float z)const
-{
-    // n = (-df/dx, 1, -df/dz)
-    XMFLOAT3 n(
-        -0.03f*z*cosf(0.1f*x) - 0.3f*cosf(0.1f*z),
-        1.0f,
-        -0.3f*sinf(0.1f*x) + 0.03f*x*sinf(0.1f*z));
-
-    XMVECTOR unitNormal = XMVector3Normalize(XMLoadFloat3(&n));
-    XMStoreFloat3(&n, unitNormal);
-
-    return n;
-}
